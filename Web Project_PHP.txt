@@ -1,0 +1,186 @@
+Slide 4:
+
+test/PersistenceEventRegistrationTest.php
+
+<?php
+require_once 'C:\gM\workspace-web\EventRegistration\persistence\PersistenceEventRegistration.php';
+require_once 'C:\gM\workspace-web\EventRegistration\model\RegistrationManager.php';
+require_once 'C:\gM\workspace-web\EventRegistration\model\Participant.php';
+
+class PersistenceEventRegistrationTest extends PHPUnit_Framework_TestCase
+{
+    protected $pm;
+
+    protected function setUp()
+    {
+        $this->pm = new PersistenceEventRegistration();
+    }
+
+    protected function tearDown()
+    {
+    }
+
+    public function testPersistence()
+    {
+		// 1. Create test data
+		$rm = RegistrationManager::getInstance();
+		$participant = new Participant("Frank");
+		$rm->addParticipant($participant);
+		
+		// 2. Write all of the data
+		$this->pm->writeDataToStore($rm);
+		
+		// 3. Clear the data from memory
+		$rm->delete();
+		
+		$this->assertEquals(0, count($rm->getParticipants()));
+		
+		// 4. Load it back in
+		$rm = $this->pm->loadDataFromStore();
+		
+		// 5. Check that we got it back
+		$this->assertEquals(1, count($rm->getParticipants()));
+		$myParticipant = $rm->getParticipant_index(0);
+		$this->assertEquals("Frank", $myParticipant->getName());
+    }
+
+}
+?>
+
+
+
+Slide 5:
+
+PersistenceEventRegistration.php
+
+<?php
+
+class PersistenceEventRegistration {
+	private $filename;
+	
+	function __construct($filename = 'data.txt') {
+		$this->filename = $filename;
+	}
+
+	function loadDataFromStore() {
+		if (file_exists($this->filename)) {
+			$str = file_get_contents($this->filename);
+			$rm = unserialize($str);
+		} else {
+			$rm = RegistrationManager::getInstance();
+		}
+		
+		return $rm;
+	}
+	
+	function writeDataToStore($rm) {
+		$str = serialize($rm);
+		file_put_contents($this->filename, $str);
+	}
+}
+?>
+
+
+Slide 9:
+
+index.php
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<title>Event Registration</title>
+		<style>
+			.error {color: #FF0000;}
+		</style>
+	</head>
+	<body>
+		<?php
+		
+		session_start();
+		
+		?>
+		<form action="addparticipant.php" method="post">
+			<p>Name? <input type="text" name="participant_name" />
+			<span class="error">
+			<?php 
+			if (isset($_SESSION['errorParticipantName']) && !empty($_SESSION['errorParticipantName'])) {
+				echo " * " . $_SESSION["errorParticipantName"];
+			}
+			?>
+			</span></p>
+			<p><input type="submit" value="Add Participant"/></p>
+		</form>
+	</body>
+</html>
+
+
+
+
+Slide 11:
+
+addparticipant.php
+
+<?php
+require_once 'controller/Controller.php';
+
+session_start();
+
+$c = new Controller();
+try {
+	$c->createParticipant($_POST['participant_name']);
+	$_SESSION["errorParticipantName"] = "";
+} catch (Exception $e) {
+	$_SESSION["errorParticipantName"] = $e->getMessage();
+}
+?>
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="refresh" content="0; url=/EventRegistration/" />
+	</head>
+</html>
+
+
+
+
+Slide 12:
+
+controller/Controller.php
+
+<?php
+require_once 'C:\gM\workspace-web\EventRegistration\controller\InputValidator.php';
+require_once 'C:\gM\workspace-web\EventRegistration\persistence\PersistenceEventRegistration.php';
+require_once 'C:\gM\workspace-web\EventRegistration\model\Event.php';
+require_once 'C:\gM\workspace-web\EventRegistration\model\Participant.php';
+require_once 'C:\gM\workspace-web\EventRegistration\model\Registration.php';
+require_once 'C:\gM\workspace-web\EventRegistration\model\RegistrationManager.php';
+
+class Controller
+{
+	public function __construct()
+	{
+	}
+
+	public function createParticipant($participant_name) {
+		// 1. Validate input
+		$name = InputValidator::validate_input($participant_name);
+		if ($name == null || strlen($name) == 0) {
+			throw new Exception("Participant name cannot be empty!");
+		} else {
+			// 2. Load all of the data
+			$pm = new PersistenceEventRegistration();
+			$rm = $pm->loadDataFromStore();
+			
+			// 3. Add the new participant
+			$participant = new Participant($name);
+			$rm->addParticipant($participant);
+		
+			// 4. Write all of the data
+			$pm->writeDataToStore($rm);
+		}
+	}
+	
+}
+?>
